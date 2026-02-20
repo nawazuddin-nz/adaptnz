@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { User, Session } from '@supabase/supabase-js';
-import { LogOut, Plus, BookOpen, Award, TrendingUp, Download, Lightbulb } from 'lucide-react';
+import { LogOut, Plus, BookOpen, Award, TrendingUp, Download, Lightbulb, Home, Trash2 } from 'lucide-react';
 import { CourseSuggestionModal } from "@/components/CourseSuggestionModal";
 
 interface Course {
@@ -39,6 +39,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [downloadingCert, setDownloadingCert] = useState<string | null>(null);
   const [suggestingNext, setSuggestingNext] = useState<string | null>(null);
+  const [deletingCourse, setDeletingCourse] = useState<string | null>(null);
   const [suggestionModal, setSuggestionModal] = useState<{
     isOpen: boolean;
     suggestions: any;
@@ -242,8 +243,31 @@ const Dashboard = () => {
     }
   };
 
+  const deleteCourse = async (courseId: string, courseName: string) => {
+    if (!confirm(`Are you sure you want to delete "${courseName}"? This cannot be undone.`)) return;
+    
+    try {
+      setDeletingCourse(courseId);
+      
+      // Delete progress, milestones, certificates, then course
+      await supabase.from('progress').delete().eq('course_id', courseId);
+      await supabase.from('certificates').delete().eq('course_id', courseId);
+      await supabase.from('milestones').delete().eq('course_id', courseId);
+      
+      const { error } = await supabase.from('courses').delete().eq('id', courseId);
+      if (error) throw error;
+      
+      setCourses(prev => prev.filter(c => c.id !== courseId));
+      setCertificates(prev => prev.filter(c => c.course_id !== courseId));
+      toast({ title: "Deleted", description: `"${courseName}" has been deleted.` });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to delete course", variant: "destructive" });
+    } finally {
+      setDeletingCourse(null);
+    }
+  };
 
-   const suggestNextCourse = async (courseId: string, courseName: string) => {
+  const suggestNextCourse = async (courseId: string, courseName: string) => {
     try {
       setSuggestingNext(courseId);
       
@@ -273,7 +297,6 @@ const Dashboard = () => {
     }
   };
 
-
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -283,180 +306,214 @@ const Dashboard = () => {
   }
 
   return (
-  <div className="min-h-screen bg-gray-50">
-    {/* Header */}
-    <header className="border-b border-gray-200 bg-white shadow-sm">
-      <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Welcome back!</p>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border bg-card/30">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <div>
+
+            <h1 className="text-2xl font-bold">Dashboard</h1>
+            <p className="text-muted-foreground">Welcome back {'User'}!</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate('/')}>
+              <Home className="w-4 h-4 mr-2" />
+              Home
+            </Button>
+            <Button variant="ghost" onClick={handleSignOut}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
         </div>
-        <Button 
-          variant="ghost" 
-          onClick={handleSignOut}
-          className="text-gray-700 hover:bg-gray-800"
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          Sign Out
-        </Button>
-      </div>
-    </header>
+      </header>
 
-    <div className="container mx-auto px-4 py-8">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card className="bg-white border border-gray-200 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Active Courses</CardTitle>
-            <BookOpen className="h-4 w-4 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">
-              {courses.filter(c => c.status === 'active').length}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="container mx-auto px-4 py-8">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Courses</CardTitle>
+              <BookOpen className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {courses.filter(c => c.status === 'active').length}
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-white border border-gray-200 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Completed Courses</CardTitle>
-            <TrendingUp className="h-4 w-4 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">
-              {courses.filter(c => c.status === 'completed').length}
-            </div>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Completed Courses</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {courses.filter(c => c.status === 'completed').length}
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-white border border-gray-200 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Certificates Earned</CardTitle>
-            <Award className="h-4 w-4 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{certificates.length}</div>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Certificates Earned</CardTitle>
+              <Award className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{certificates.length}</div>
+            </CardContent>
+          </Card>
+        </div>
 
-      {/* Action Buttons */}
-      <div className="flex gap-4 mb-8">
-        <Button 
-          onClick={() => navigate('/onboarding')} 
-          className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" />
-          Start New Course
-        </Button>
-      </div>
+        {/* Action Buttons */}
+        <div className="flex gap-4 mb-8">
+          <Button onClick={() => navigate('/onboarding')} className="flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            Start New Course
+          </Button>
+        </div>
 
-      {/* Courses Section */}
-      <div className="w-[90%] mx-auto grid grid-cols-1 gap-8">
-        <div>
-          <h2 className="text-xl font-semibold mb-4 text-gray-900">My Courses</h2>
-          {courses.length === 0 ? (
-            <Card className="bg-white border border-gray-200 shadow-sm">
-              <CardContent className="pt-6">
-                <div className="text-center text-gray-400">
-                  <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>No courses yet. Start your first learning journey!</p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {courses.map((course) => (
-                <Card 
-                  key={course.id} 
-                  className="cursor-pointer w-full bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-                >
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg text-gray-900">{course.name}</CardTitle>
-                        <CardDescription className="text-gray-600">Duration: {course.duration}</CardDescription>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Courses Section */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">My Courses</h2>
+            {courses.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center text-muted-foreground">
+                    <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No courses yet. Start your first learning journey!</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {courses.map((course) => (
+                  <Card key={course.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="text-lg">{course.name}</CardTitle>
+                          <CardDescription>Duration: {course.duration}</CardDescription>
+                        </div>
+                        <Badge variant={course.status === 'completed' ? 'default' : 'secondary'}>
+                          {course.status}
+                        </Badge>
                       </div>
-                      <Badge 
-                        variant={course.status === 'completed' ? 'default' : 'secondary'}
-                        className="capitalize"
-                      >
-                        {course.status}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm text-gray-700">
-                        <span>Progress</span>
-                        <span>{calculateProgress(course)}%</span>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>Progress</span>
+                          <span>{calculateProgress(course)}%</span>
+                        </div>
+                        <Progress value={calculateProgress(course)} />
                       </div>
-                      <Progress value={calculateProgress(course)} className="h-2 rounded-full bg-gray-200" />
-                    </div>
-                    <div className="mt-4 flex gap-2 flex-wrap">
-                     <Button 
-  onClick={() => navigate(`/course/${course.id}`)}
-  variant="outline" 
-  size="sm"
-  className="
-    border border-gray-300 text-gray-800 bg-white
-    hover:bg-gray-900 hover:shadow-sm transition-all
-    focus:outline-none focus:ring-2 focus:ring-blue-300
-  "
->
-  {course.status === 'completed' ? 'Review' : 'Continue'}
-</Button>
-
-                      
-                      {course.status === 'completed' && certificates.find(cert => cert.course_id === course.id) && (
-                        <Button 
-                          onClick={() => downloadCertificate(course.id, course.name)}
-                          variant="outline"
-                          size="sm"
-                          disabled={downloadingCert === course.id}
-                          className=" border border-gray-300 text-gray-800 bg-white
-    hover:bg-gray-900 hover:shadow-sm transition-all
-    focus:outline-none focus:ring-2 focus:ring-blue-300"
-                        >
-                          <Download className="w-4 h-4 mr-1" />
-                          {downloadingCert === course.id ? 'Downloading...' : 'Certificate'}
-                        </Button>
-                      )}
-
-  {course.status === 'completed' && (
+                      <div className="mt-4 flex justify-between items-center">
+                        <div className="flex gap-2 flex-wrap">
                           <Button 
-                            onClick={() => suggestNextCourse(course.id, course.name)}
-                            variant="outline"
+                            onClick={() => navigate(`/course/${course.id}`)}
+                            variant="outline" 
                             size="sm"
-                            disabled={suggestingNext === course.id}
                           >
-                            <Lightbulb className="w-4 h-4 mr-1" />
-                            {suggestingNext === course.id ? 'Suggesting...' : 'Next Course'}
+                            {course.status === 'completed' ? 'Review' : 'Continue'}
                           </Button>
-                        )}
+                          
+                          {course.status === 'completed' && certificates.find(cert => cert.course_id === course.id) && (
+                            <Button 
+                              onClick={() => downloadCertificate(course.id, course.name)}
+                              variant="outline"
+                              size="sm"
+                              disabled={downloadingCert === course.id}
+                            >
+                              <Download className="w-4 h-4 mr-1" />
+                              {downloadingCert === course.id ? 'Downloading...' : 'Certificate'}
+                            </Button>
+                          )}
+                          
+                          {course.status === 'completed' && (
+                            <Button 
+                              onClick={() => suggestNextCourse(course.id, course.name)}
+                              variant="outline"
+                              size="sm"
+                              disabled={suggestingNext === course.id}
+                            >
+                              <Lightbulb className="w-4 h-4 mr-1" />
+                              {suggestingNext === course.id ? 'Suggesting...' : 'Next Course'}
+                            </Button>
+                          )}
+                        </div>
+                        <Button 
+                          onClick={() => deleteCourse(course.id, course.name)}
+                          variant="destructive"
+                          size="sm"
+                          disabled={deletingCourse === course.id}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          {deletingCourse === course.id ? 'Deleting...' : 'Delete'}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
 
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+          {/* Certificates Section */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Certificates</h2>
+            {certificates.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center text-muted-foreground">
+                    <Award className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>Complete courses to earn certificates!</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {certificates.map((certificate) => {
+                  const course = courses.find(c => c.id === certificate.course_id);
+                  return (
+                    <Card key={certificate.id}>
+                      <CardHeader>
+                        <CardTitle className="text-lg">{course?.name || 'Course'} Certificate</CardTitle>
+                        <CardDescription>
+                          Earned on {new Date(certificate.created_at).toLocaleDateString()}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => downloadCertificate(certificate.course_id, course?.name || 'Course')}
+                          disabled={downloadingCert === certificate.course_id}
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          {downloadingCert === certificate.course_id ? 'Downloading...' : 'Download Certificate'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-        <CourseSuggestionModal
+
+      {/* Course Suggestion Modal */}
+      <CourseSuggestionModal
         isOpen={suggestionModal.isOpen}
         onClose={() => setSuggestionModal(prev => ({ ...prev, isOpen: false }))}
         suggestions={suggestionModal.suggestions}
         courseName={suggestionModal.courseName}
       />
-  </div>
-
-  
-
-
-);
-
+    </div>
+  );
 };
 
 export default Dashboard;
